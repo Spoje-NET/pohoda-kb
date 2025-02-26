@@ -1,0 +1,11 @@
+{
+    "name": "spojenet/pohoda-kb",
+    "description": "KB transactions downloader for Stormware Pohoda",
+    "license": "MIT",
+    "autoload": {
+        "psr-4": {
+            "Pohoda\\KB\\": "src/"
+        }
+    },
+    "require": {}
+}
