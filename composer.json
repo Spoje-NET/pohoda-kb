@@ -2,10 +2,42 @@
     "name": "spojenet/pohoda-kb",
     "description": "KB transactions downloader for Stormware Pohoda",
     "license": "MIT",
+    "authors": [
+        {
+            "name": "Ladislav Vondráček",
+            "email": "lad.von@gmail.com",
+            "homepage": "https://www.lawondyss.cz"
+        }
+    ],
+    "minimum-stability": "dev",
     "autoload": {
         "psr-4": {
-            "Pohoda\\KB\\": "src/"
+            "Pohoda\\KB\\": "src/Pohoda/KB"
         }
     },
-    "require": {}
+    "require": {
+        "ext-curl": "*",
+        "ext-openssl": "*",
+        "ext-simplexml": "*",
+        "vgrem/php-spo": "^3",
+        "vitexsoftware/pohoda-connector": "dev-main",
+        "spojenet/pohoda-sql": "dev-main",
+        "spojenet/kb-accountsapi": "dev-main"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "*",
+        "phpstan/phpstan": "*",
+        "friendsofphp/php-cs-fixer": "^3.61",
+        "ergebnis/composer-normalize": "^2.43",
+        "ergebnis/php-cs-fixer-config": "^6.34"
+    },
+    "config": {
+        "allow-plugins": {
+            "ergebnis/composer-normalize": true
+        }
+    },
+    "scripts": {
+        "phpcs": "php-cs-fixer fix",
+        "phpstan": "phpstan analyse -c phpstan-default.neon"
+    }
 }

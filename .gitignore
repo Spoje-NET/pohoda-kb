@@ -1,0 +1,6 @@
+/vendor
+.*
+!.env.example
+!.gitignore
+!.php-cs-fixer.php
+composer.lock
