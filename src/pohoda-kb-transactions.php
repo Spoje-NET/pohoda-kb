@@ -26,12 +26,16 @@ require_once __DIR__.'/../vendor/autoload.php';
  */
 $envFile = $argv[1] ?? (__DIR__.'/../.env');
 Shared::init(
-  configKeys: ['POHODA_URL', 'POHODA_USERNAME', 'POHODA_PASSWORD', 'POHODA_ICO', 'CERT_FILE', 'CERT_PASS', 'XIBMCLIENTID', 'ACCOUNT_NUMBER', 'ACCESS_TOKEN'],
-    envFile: $envFile,
+  configKeys: [
+    'POHODA_URL', 'POHODA_USERNAME', 'POHODA_PASSWORD', 'POHODA_ICO',
+    'CERT_FILE', 'CERT_PASS', 'XIBMCLIENTID', 'ACCOUNT_NUMBER',
+    'ACCESS_TOKEN', 'USE_DOTENV_FOR_CLIENT'
+  ],
+  envFile: $envFile,
 );
 PohodaBankClient::checkCertificate(Shared::cfg('CERT_FILE'), Shared::cfg('CERT_PASS'));
 
-$kbClient = KbClient::createDefault($envFile);
+$kbClient = KbClient::createDefault(envFilePath: Shared::cfg('USE_DOTENV_FOR_CLIENT') ? $envFile : null);
 
 $engine = new Transactor($kbClient, Shared::cfg('ACCESS_TOKEN'), Shared::cfg('ACCOUNT_NUMBER'));
 $engine->setScope(Shared::cfg('IMPORT_SCOPE', 'yesterday'));
