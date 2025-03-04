@@ -24,19 +24,27 @@ require_once __DIR__.'/../vendor/autoload.php';
 /**
  * Get today's transactions list.
  */
-$envFile = $argv[1] ?? (__DIR__.'/../.env');
-Shared::init(
-  configKeys: [
-    'POHODA_URL', 'POHODA_USERNAME', 'POHODA_PASSWORD', 'POHODA_ICO',
-    'CERT_FILE', 'CERT_PASS', 'XIBMCLIENTID', 'ACCOUNT_NUMBER',
-    'ACCESS_TOKEN', 'USE_DOTENV_FOR_CLIENT'
-  ],
-  envFile: $envFile,
-);
-PohodaBankClient::checkCertificate(Shared::cfg('CERT_FILE'), Shared::cfg('CERT_PASS'));
+$options = getopt('o::e::', ['output::environment::']);
 
+Shared::init(
+    configKeys: [
+        'POHODA_URL', 'POHODA_USERNAME', 'POHODA_PASSWORD', 'POHODA_ICO',
+        'ACCOUNT_NUMBER',
+        'ACCESS_TOKEN', 'USE_DOTENV_FOR_CLIENT',
+    ],
+    envFile: \array_key_exists('environment', $options) ? $options['environment'] : (\array_key_exists('e', $options) ? $options['e'] : '../.env'),
+);
+$report = [];
 $kbClient = KbClient::createDefault(envFilePath: Shared::cfg('USE_DOTENV_FOR_CLIENT') ? $envFile : null);
 
 $engine = new Transactor($kbClient, Shared::cfg('ACCESS_TOKEN'), Shared::cfg('ACCOUNT_NUMBER'));
 $engine->setScope(Shared::cfg('IMPORT_SCOPE', 'yesterday'));
 $engine->import();
+
+$engine->addStatusMessage('stage 6/6: saving report', 'debug');
+
+$report['exitcode'] = $exitcode;
+$written = file_put_contents($destination, json_encode($report, Shared::cfg('DEBUG') ? \JSON_PRETTY_PRINT | \JSON_UNESCAPED_UNICODE : 0));
+$engine->addStatusMessage(sprintf(_('Saving result to %s'), $destination), $written ? 'success' : 'error');
+
+exit($exitcode);

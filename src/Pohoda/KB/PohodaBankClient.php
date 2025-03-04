@@ -37,8 +37,11 @@ abstract class PohodaBankClient extends \mServer\Bank
     /**
      * @param array<string, string> $options
      */
-    public function __construct(protected string $accessToken, string $bankAccount, array $options = [])
-    {
+    public function __construct(
+        protected string $accessToken,
+        string $bankAccount,
+        array $options = [],
+    ) {
         parent::__construct(null, $options);
 
         $this->setDataValue('account', $bankAccount);
