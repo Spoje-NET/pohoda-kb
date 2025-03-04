@@ -4,3 +4,4 @@
 !.gitignore
 !.php-cs-fixer.php
 composer.lock
+/nbproject/private/
