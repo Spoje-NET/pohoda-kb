@@ -16,6 +16,7 @@ declare(strict_types=1);
 namespace Pohoda\KB;
 
 use Ease\Shared;
+use SpojeNet\KbAccountsApi\KbClient;
 
 abstract class PohodaBankClient extends \mServer\Bank
 {
@@ -30,7 +31,7 @@ abstract class PohodaBankClient extends \mServer\Bank
     public static string $dateFormat = 'Y-m-d';
     public string $currency;
     protected \DateTimeImmutable $since;
-    protected \DateTimeImmutable $until;
+    protected ?\DateTimeImmutable $until = null;
     protected string $bankIDS;
     private int $exitCode = 0;
 
@@ -38,7 +39,9 @@ abstract class PohodaBankClient extends \mServer\Bank
      * @param array<string, string> $options
      */
     public function __construct(
+        protected readonly KbClient $kbClient,
         protected string $accessToken,
+        protected string $accountId,
         string $bankAccount,
         array $options = [],
     ) {
@@ -98,106 +101,7 @@ abstract class PohodaBankClient extends \mServer\Bank
      *
      * @throws \Exception
      */
-    public function setScope(string $scope): void
-    {
-        switch ($scope) {
-            case 'today':
-                $this->since = (new \DateTimeImmutable())->setTime(0, 0);
-                $this->until = (new \DateTimeImmutable())->setTime(23, 59);
-
-                break;
-            case 'yesterday':
-                $this->since = (new \DateTimeImmutable('yesterday'))->setTime(0, 0);
-                $this->until = (new \DateTimeImmutable('yesterday'))->setTime(23, 59);
-
-                break;
-            case 'current_month':
-                $this->since = new \DateTimeImmutable('first day of this month');
-                $this->until = new \DateTimeImmutable();
-
-                break;
-            case 'last_month':
-                $this->since = new \DateTimeImmutable('first day of last month');
-                $this->until = new \DateTimeImmutable('last day of last month');
-
-                break;
-            case 'last_two_months':
-                $this->since = (new \DateTimeImmutable('first day of last month'))->modify('-1 month');
-                $this->until = (new \DateTimeImmutable('last day of last month'));
-
-                break;
-            case 'previous_month':
-                $this->since = new \DateTimeImmutable('first day of -2 month');
-                $this->until = new \DateTimeImmutable('last day of -2 month');
-
-                break;
-            case 'two_months_ago':
-                $this->since = new \DateTimeImmutable('first day of -3 month');
-                $this->until = new \DateTimeImmutable('last day of -3 month');
-
-                break;
-            case 'this_year':
-                $this->since = new \DateTimeImmutable('first day of January '.\date('Y'));
-                $this->until = new \DateTimeImmutable('last day of December'.\date('Y'));
-
-                break;
-            case 'January':  // 1
-            case 'February': // 2
-            case 'March':    // 3
-            case 'April':    // 4
-            case 'May':      // 5
-            case 'June':     // 6
-            case 'July':     // 7
-            case 'August':   // 8
-            case 'September': // 9
-            case 'October':  // 10
-            case 'November': // 11
-            case 'December': // 12
-                $this->since = new \DateTimeImmutable('first day of '.$scope.' '.\date('Y'));
-                $this->until = new \DateTimeImmutable('last day of '.$scope.' '.\date('Y'));
-
-                break;
-            case 'auto':
-                $latestRecord = $this->getColumnsFromPohoda(['id', 'lastUpdate'], [
-                    'limit' => 1,
-                    'order' => 'lastUpdate@A',
-                    'source' => $this->sourceString(),
-                    'bank' => $this->bankIDS,
-                ]);
-
-                if (\array_key_exists(0, $latestRecord) && \array_key_exists('lastUpdate', $latestRecord[0])) {
-                    $this->since = $latestRecord[0]['lastUpdate'];
-                } else {
-                    $this->addStatusMessage('Previous record for "auto since" not found. Defaulting to today\'s 00:00', 'warning');
-                    $this->since = (new \DateTimeImmutable())->setTime(0, 0);
-                }
-
-                $this->until = new \DateTimeImmutable(); // Now
-
-                break;
-
-            default:
-                if (\str_contains($scope, '>')) {
-                    [$begin, $end] = \explode('>', $scope, limit: 2);
-                    $this->since = new \DateTimeImmutable($begin);
-                    $this->until = new \DateTimeImmutable($end);
-                } else {
-                    if (\preg_match('/^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[1-2][0-9]|3[0-1])$/', $scope)) {
-                        $this->since = (new \DateTimeImmutable($scope))->setTime(0, 0);
-                        $this->until = (new \DateTimeImmutable($scope))->setTime(23, 59, 59, 999);
-
-                        break;
-                    }
-
-                    throw new \Exception('Unknown scope '.$scope);
-                }
-        }
-
-        if (!\in_array($scope, ['auto', 'today', 'yesterday'], strict: true)) {
-            $this->since = $this->since->setTime(0, 0);
-            $this->until = $this->until->setTime(23, 59, 59, 999);
-        }
-    }
+    abstract public function setScope(string $scope): void;
 
     /**
      * Is Record with current remoteNumber already present in Pohoda?

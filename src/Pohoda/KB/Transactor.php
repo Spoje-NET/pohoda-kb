@@ -19,7 +19,6 @@ use Ease\Shared;
 use SpojeNet\KbAccountsApi\Entity\CreditDebit;
 use SpojeNet\KbAccountsApi\Entity\Transaction;
 use SpojeNet\KbAccountsApi\Exception\KbClientException;
-use SpojeNet\KbAccountsApi\KbClient;
 use SpojeNet\KbAccountsApi\Selection\TransactionSelection;
 
 /**
@@ -27,18 +26,6 @@ use SpojeNet\KbAccountsApi\Selection\TransactionSelection;
  */
 class Transactor extends PohodaBankClient
 {
-    /**
-     * @param array<string, string> $options
-     */
-    public function __construct(
-        private readonly KbClient $kbClient,
-        string $accessToken,
-        string $bankAccount,
-        array $options = [],
-    ) {
-        parent::__construct($accessToken, $bankAccount, $options);
-    }
-
     /**
      * Obtain Transactions from RB.
      *
@@ -53,7 +40,7 @@ class Transactor extends PohodaBankClient
         try {
             do {
                 $transactions = $this->kbClient->transactions($this->accessToken, new TransactionSelection(
-                    accountId: $this->getDataValue('account'),
+                    accountId: $this->accountId,
                     page: $page++,
                     fromDate: $this->since,
                     toDate: $this->until,
@@ -81,17 +68,16 @@ class Transactor extends PohodaBankClient
      */
     public function import(): void
     {
-        // $allMoves = $this->getColumnsFromPohoda('id', ['limit' => 0, 'banka' => $this->bank]);
         $allTransactions = $this->getTransactions();
         $countTransactions = \count($allTransactions);
         $this->addStatusMessage("{$countTransactions} transactions obtained via API", 'debug');
         $success = 0;
 
         foreach ($allTransactions as $transaction) {
-            // $this->dataReset();
             $this->takeTransaction($transaction);
+            $result = $this->insertTransactionToPohoda();
 
-            if ($this->insertTransactionToPohoda()) {
+            if ($result) {
                 ++$success;
             }
 
@@ -106,99 +92,38 @@ class Transactor extends PohodaBankClient
      */
     public function takeTransaction(Transaction $transaction): void
     {
-        // $this->setMyKey(\Pohoda\RO::code('RB' . $transactionData->entryReference));
         $bankType = match ($transaction->creditDebitIndicator) {
             CreditDebit::Debit => 'expense',
             CreditDebit::Credit => 'receipt',
         };
-        $this->setDataValue('bankType', $bankType);
-        $this->setDataValue('account', Shared::cfg('POHODA_BANK_IDS'));
-        $this->setDataValue('datePayment', $transaction->valueDate?->format(self::$dateFormat) ?? $transaction->lastUpdated->format(self::$dateFormat));
-        $this->setDataValue('intNote', _('Automatic Import').': '.Shared::appName().' '.Shared::appVersion().' '.($transaction->entryReference ?? ''));
-        $this->setDataValue('statementNumber', ['statementNumber' => $transaction->bankTransactionCode->code]);
+        $intNote = sprintf('%s: %s %s %s', _('Automatic Import'), Shared::appName(), Shared::appVersion(), $transaction->entryReference ?? '');
+        $amount = abs($transaction->amount->value);
+
         $this->setDataValue('symPar', $transaction->entryReference ?? '');
-
-        // $bankRecord = [
-        // //    "MOSS" => ['ids' => 'AB'],
-        //    'account' => 'KB',
-        // //    "accounting",
-        // //    "accountingPeriodMOSS",
-        // //    "activity" => 'testing',
-        //    'bankType' => 'receipt',
-        // //    "centre",
-        // //    "classificationKVDPH",
-        // //    "classificationVAT",
-        //    "contract" => 'n/a',
-        //    "datePayment" => date('Y-m-d'),
-        //    "dateStatement" => date('Y-m-d'),
-        // //    "evidentiaryResourcesMOSS",
-        //    "intNote" => 'Import works well',
-        // //    "myIdentity",
-        //    "note" => 'Automated import',
-        //    'partnerIdentity' => ['address' => ['street' => 'dlouha'], 'shipToAddress' => ['street' => 'kratka']],
-        //    "paymentAccount" => ['accountNo' => '1234', 'bankCode' => '5500'],
-        //    'statementNumber' => [
-        //        'statementNumber' => (string) time(),
-        //    //'numberMovement' => (string) time()
-        //    ],
-        // //    "symConst" => 'XX',
-        // // ?"symPar",
-        //    "symSpec" => '23',
-        //    "symVar" => (string) time(),
-        //    "text" => 'Testing income ' . time(),
-        //    'homeCurrency' => ['priceNone' => '1001']
-        // ];
-
-        // $this->setDataValue('cisDosle', $transactionData->entryReference);
-        if (isset($transaction->references?->variable)) {
-            $this->setDataValue('symVar', $transaction->references->variable);
-        }
-
-        if (isset($transaction->references?->constant) && (int) $transaction->references->constant) {
-            $constantSymbol = sprintf('%04d', $transaction->references->constant);
-            // TODO Not exists method ensureKSExists() and class \Pohoda\RO
-            // $this->ensureKSExists($constantSymbol);
-            // $this->setDataValue('konSym', \Pohoda\RO::code($constantSymbol));
-            $this->setDataValue('konSym', $constantSymbol);
-        }
-
-        if (isset($transaction->bookingDate)) {
-            $this->setDataValue('datVyst', $transaction->bookingDate);
-        }
-
-        if (isset($transaction->valueDate)) {
-            $this->setDataValue('duzpPuv', $transaction->valueDate);
-        }
-
-        if (isset($transaction->references->myDescription)) {
-            $this->setDataValue('text', $transaction->references->myDescription);
-        }
-
+        $this->setDataValue('intNote', $intNote);
         $this->setDataValue('note', 'Import Job '.Shared::cfg('JOB_ID', 'n/a'));
+        $this->setDataValue('datePayment', ($transaction->valueDate ?? $transaction->bookingDate ?? $transaction->lastUpdated)->format(self::$dateTimeFormat));
+        $this->setDataValue('bankType', $bankType);
+        $this->setDataValue('statementNumber', ['statementNumber' => $transaction->bankTransactionCode->code]);
+        $this->setDataValue('account', Shared::cfg('POHODA_BANK_IDS'));
+
+        $transaction->amount->currency === 'CZK'
+            ? $this->setDataValue('homeCurrency', ['priceNone' => $amount])
+            : $this->setDataValue('foreignCurrency', ['priceSum' => $amount, 'currency' => $transaction->amount->currency]);
+
+        if (isset($transaction->references)) {
+            $refs = $transaction->references;
+            isset($refs->myDescription) && $this->setDataValue('text', $refs->myDescription);
+            isset($refs->variable) && $this->setDataValue('symVar', $refs->variable);
+            isset($refs->specific) && $this->setDataValue('symSpec', $refs->specific);
+            isset($refs->constant) && $this->setDataValue('symConst', sprintf('%04d', $refs->constant));
+        }
 
         if (isset($transaction->counterParty)) {
-            $counterAccount = $transaction->counterParty;
-
-            if (isset($transaction->counterParty->name)) {
-                // TODO  $this->setDataValue('nazFirmy', $transaction->counterParty->name);
-            }
-
-            $counterAccountNumber = $counterAccount->accountNo;
-            $accountNumber = $counterAccountNumber;
-
-            $this->setDataValue('paymentAccount', ['accountNo' => $accountNumber, 'bankCode' => $counterAccount->bankCode]);
-
-            $amount = (string) abs($transaction->amount->value);
-
-            if ($transaction->amount->currency === 'CZK') {
-                $this->setDataValue('homeCurrency', ['priceNone' => $amount]);
-            } else {
-                $this->setDataValue('foreignCurrency', ['priceNone' => $amount]); // TODO: Not tested
-            }
+            $party = $transaction->counterParty;
+            isset($party->name) && $this->setDataValue('partnerIdentity', ['address' => ['name' => $party->name]]);
+            isset($party->accountNo, $party->bankCode) && $this->setDataValue('paymentAccount', ['accountNo' => $party->accountNo, 'bankCode' => $party->bankCode]);
         }
-
-        // $this->setDataValue('source', $this->sourceString());
-        // echo $this->getJsonizedData() . "\n";
     }
 
     /**
@@ -225,15 +150,6 @@ class Transactor extends PohodaBankClient
 
                 break;
             case 'auto':
-                //  $latestRecord = $this->getColumnsFromPohoda(['id', 'lastUpdate'], ['limit' => 1, 'order' => 'lastUpdate@A', 'source' => $this->sourceString(), 'banka' => $this->bank]);
-                //
-                //  if (\array_key_exists(0, $latestRecord) && \array_key_exists('lastUpdate', $latestRecord[0])) {
-                //      $this->since = $latestRecord[0]['lastUpdate'];
-                //  } else {
-                //      $this->addStatusMessage('Previous record for "auto since" not found. Defaulting to today\'s 00:00', 'warning');
-                //      $this->since = (new \DateTime('yesterday'))->setTime(0, 0);
-                //  }
-
                 $this->since = (new \DateTimeImmutable('89 days ago'))->setTime(0, 0);
                 $this->until = new \DateTimeImmutable();
 
