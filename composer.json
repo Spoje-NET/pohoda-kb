@@ -19,6 +19,7 @@
         "ext-curl": "*",
         "ext-openssl": "*",
         "ext-simplexml": "*",
+        "ext-gettext": "*",
         "vgrem/php-spo": "^3",
         "vitexsoftware/pohoda-connector": "dev-main",
         "spojenet/pohoda-sql": "dev-main",
@@ -29,7 +30,8 @@
         "phpstan/phpstan": "*",
         "friendsofphp/php-cs-fixer": "^3.61",
         "ergebnis/composer-normalize": "^2.43",
-        "ergebnis/php-cs-fixer-config": "^6.34"
+        "ergebnis/php-cs-fixer-config": "^6.34",
+        "tracy/tracy": "^3.0@dev"
     },
     "config": {
         "allow-plugins": {
@@ -37,7 +39,7 @@
         }
     },
     "scripts": {
-        "phpcs": "php-cs-fixer fix",
-        "phpstan": "phpstan analyse -c phpstan-default.neon"
+        "phpcsfix": "PHP_CS_FIXER_IGNORE_ENV=1 php-cs-fixer fix",
+        "phpstan": "phpstan analyse -c phpstan-default.neon --memory-limit=1G"
     }
 }

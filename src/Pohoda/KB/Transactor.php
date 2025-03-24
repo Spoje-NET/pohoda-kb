@@ -68,17 +68,26 @@ class Transactor extends PohodaBankClient
      */
     public function import(): void
     {
+        $this->addStageMessage('loading transactions');
         $allTransactions = $this->getTransactions();
         $countTransactions = \count($allTransactions);
         $this->addStatusMessage("{$countTransactions} transactions obtained via API", 'debug');
         $success = 0;
 
+        $this->addStageMessage('importing transactions');
+
         foreach ($allTransactions as $transaction) {
             $this->takeTransaction($transaction);
             $result = $this->insertTransactionToPohoda();
 
-            if ($result) {
+            if ($result['success'] ?? false) {
                 ++$success;
+            } elseif ($result['message'] ?? false) {
+                $this->addStatusMessage($result['message'], 'error');
+            } elseif ($result['messages'] ?? false) {
+                foreach ($result['messages'] as $message) {
+                    $this->addStatusMessage($message, 'error');
+                }
             }
 
             $this->reset();
@@ -99,10 +108,11 @@ class Transactor extends PohodaBankClient
         $intNote = sprintf('%s: %s %s %s', _('Automatic Import'), Shared::appName(), Shared::appVersion(), $transaction->entryReference ?? '');
         $amount = abs($transaction->amount->value);
 
-        $this->setDataValue('symPar', $transaction->entryReference ?? '');
+        $this->setDataValue('symPar', $this->createSymPar($transaction->entryReference ?? ''));
         $this->setDataValue('intNote', $intNote);
         $this->setDataValue('note', 'Import Job '.Shared::cfg('JOB_ID', 'n/a'));
         $this->setDataValue('datePayment', ($transaction->valueDate ?? $transaction->bookingDate ?? $transaction->lastUpdated)->format(self::$dateTimeFormat));
+        $this->setDataValue('dateStatement', (new \DateTimeImmutable())->format(self::$dateTimeFormat));
         $this->setDataValue('bankType', $bankType);
         $this->setDataValue('statementNumber', ['statementNumber' => $transaction->bankTransactionCode->code]);
         $this->setDataValue('account', Shared::cfg('POHODA_BANK_IDS'));

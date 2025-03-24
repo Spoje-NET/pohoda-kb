@@ -19,6 +19,7 @@ use Ease\Shared;
 use SpojeNet\KbAccountsApi\KbClient;
 
 const APP_NAME = 'PohodaKBTransactions';
+error_reporting(\E_ALL & ~\E_DEPRECATED);
 
 require_once __DIR__.'/../vendor/autoload.php';
 /**
@@ -31,6 +32,7 @@ Shared::init(
         'POHODA_URL', 'POHODA_USERNAME', 'POHODA_PASSWORD', 'POHODA_ICO',
         'ACCOUNT_NUMBER', 'ACCOUNT_ID',
         'ACCESS_TOKEN', 'USE_DOTENV_FOR_CLIENT',
+        'POHODA_DEBUG',
     ],
     envFile: $envFile,
 );
@@ -47,10 +49,8 @@ $engine->setScope(Shared::cfg('IMPORT_SCOPE', 'yesterday'));
 $engine->import();
 $exitcode = $engine->getExitCode();
 
-$engine->addStatusMessage('stage 6/6: saving report', 'debug');
-
+$engine->addStageMessage('saving report');
 $destination = __DIR__.'/_report.txt';
-
 $report['exitcode'] = $exitcode;
 $written = file_put_contents($destination, json_encode($report, Shared::cfg('DEBUG') ? \JSON_PRETTY_PRINT | \JSON_UNESCAPED_UNICODE : 0));
 $engine->addStatusMessage(sprintf(_('Saving result to %s'), $destination), $written ? 'success' : 'error');

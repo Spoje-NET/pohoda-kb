@@ -20,6 +20,11 @@ use SpojeNet\KbAccountsApi\KbClient;
 
 abstract class PohodaBankClient extends \mServer\Bank
 {
+    public const ErrorCodeUnknown = 254;
+    public const ErrorCodeNotAdded = 400;
+    public const ErrorCodeNotProcessed = 401;
+    public const ErrorCodeDuplicate = 409;
+
     /**
      * DateTime Formating eg. 2021-08-01T10:00:00.0Z.
      */
@@ -32,7 +37,6 @@ abstract class PohodaBankClient extends \mServer\Bank
     public string $currency;
     protected \DateTimeImmutable $since;
     protected ?\DateTimeImmutable $until = null;
-    protected string $bankIDS;
     private int $exitCode = 0;
 
     /**
@@ -110,24 +114,33 @@ abstract class PohodaBankClient extends \mServer\Bank
      */
     public function checkForTransactionPresence(): bool
     {
-        $this->addStatusMessage('Checking for transaction presence - Not yet implemented', 'warning');
+        /** @var null|string[] $symPars */
+        static $symPars = null;
 
-        return false;
+        if ($symPars === null) {
+            $columns = $this->getColumnsFromPohoda(['symPar'], ['dateFrom' => $this->since->format(self::$dateFormat)]);
+            $symPars = \array_unique(\array_filter(\array_column($columns, 'symPar')));
+        }
+
+        return \in_array($this->getDataValue('symPar'), $symPars, strict: true);
     }
 
     /**
      * Insert Transaction to Pohoda.
      *
-     * @return array<int, array<string, string>> Imported Transactions
+     * @return array<string, mixed>
      */
     public function insertTransactionToPohoda(string $bankIDS = ''): array
     {
-        $producedId = '';
-        $producedNumber = '';
-        $producedAction = '';
         $result = [];
+        $symPar = $this->getDataValue('symPar');
 
-        if ($this->checkForTransactionPresence() === false) {
+        if ($this->checkForTransactionPresence()) {
+            $this->addStatusMessage("Record with symPar '{$symPar}' already present in Pohoda", 'warning');
+            $result['message'] = "Duplicate symPar: {$symPar}";
+            $result['success'] = false;
+            $this->exitCode = self::ErrorCodeDuplicate;
+        } else {
             try {
                 $cache = $this->getData();
                 $result['id'] = $this->getDataValue('symPar');
@@ -152,25 +165,21 @@ abstract class PohodaBankClient extends \mServer\Bank
                 } else {
                     $result['success'] = false;
                     $resultMessages = $this->messages;
+                    $this->exitCode = self::ErrorCodeNotAdded;
 
                     if (\array_key_exists('error', $resultMessages) && \count($resultMessages['error'])) {
                         foreach ($resultMessages['error'] as $errMsg) {
                             $result['messages'][] = 'error: '.$errMsg;
                         }
 
-                        $this->exitCode = 401;
+                        $this->exitCode = self::ErrorCodeNotProcessed;
                     }
                 }
             } catch (\Exception $exc) {
-                $producedId = 'n/a';
-                $producedNumber = 'n/a';
-                $producedAction = 'n/a';
                 $result['message'] = $exc->getMessage();
                 $result['success'] = false;
-                $this->exitCode = $exc->getCode() ?: 254;
+                $this->exitCode = $exc->getCode() ?: self::ErrorCodeUnknown;
             }
-        } else {
-            $this->addStatusMessage('Record with remoteNumber TODO already present in Pohoda', 'warning');
         }
 
         return $result;
@@ -278,5 +287,18 @@ abstract class PohodaBankClient extends \mServer\Bank
     public function getCompanyId(): string
     {
         return Shared::cfg('POHODA_ICO');
+    }
+
+    public function addStageMessage(string $message): void
+    {
+        static $stage = 0;
+        ++$stage;
+
+        $this->addStatusMessage("stage {$stage}: {$message}", 'debug');
+    }
+
+    protected function createSymPar(string $entryReference): string
+    {
+        return \sprintf('%u', \crc32($entryReference));
     }
 }
