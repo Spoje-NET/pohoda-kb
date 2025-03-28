@@ -109,20 +109,21 @@ abstract class PohodaBankClient extends \mServer\Bank
 
     /**
      * Is Record with current remoteNumber already present in Pohoda?
+     * It's a bit of a shame, but the transaction ID must be stored in an internal note. No other field is suitable yet.
      *
      * @todo Implement using Pohoda API UserList
      */
     public function checkForTransactionPresence(): bool
     {
-        /** @var null|string[] $symPars */
-        static $symPars = null;
+        /** @var null|string[] $transactions */
+        static $transactions = null;
 
-        if ($symPars === null) {
-            $columns = $this->getColumnsFromPohoda(['symPar'], ['dateFrom' => $this->since->format(self::$dateFormat)]);
-            $symPars = \array_unique(\array_filter(\array_column($columns, 'symPar')));
+        if ($transactions === null) {
+            $columns = $this->getColumnsFromPohoda(['intNote'], ['dateFrom' => $this->since->format(self::$dateFormat)]);
+            $transactions = \array_unique(\array_filter(\array_column($columns, 'intNote')));
         }
 
-        return \in_array($this->getDataValue('symPar'), $symPars, strict: true);
+        return \in_array($this->getDataValue('intNote'), $transactions, strict: true);
     }
 
     /**
@@ -133,17 +134,17 @@ abstract class PohodaBankClient extends \mServer\Bank
     public function insertTransactionToPohoda(string $bankIDS = ''): array
     {
         $result = [];
-        $symPar = $this->getDataValue('symPar');
+        $transactionId = $this->getDataValue('intNote');
 
         if ($this->checkForTransactionPresence()) {
-            $this->addStatusMessage("Record with symPar '{$symPar}' already present in Pohoda", 'warning');
-            $result['message'] = "Duplicate symPar: {$symPar}";
+            $this->addStatusMessage("Transaction with ID '{$transactionId}' already present in Pohoda", 'warning');
+            $result['message'] = "Duplicate transaction: {$transactionId}";
             $result['success'] = false;
             $this->exitCode = self::ErrorCodeDuplicate;
         } else {
             try {
                 $cache = $this->getData();
-                $result['id'] = $this->getDataValue('symPar');
+                $result['id'] = $transactionId;
                 $this->reset();
 
                 // TODO: $result = $this->sync();

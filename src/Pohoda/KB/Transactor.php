@@ -105,11 +105,11 @@ class Transactor extends PohodaBankClient
             CreditDebit::Debit => 'expense',
             CreditDebit::Credit => 'receipt',
         };
-        $intNote = sprintf('%s: %s %s %s', _('Automatic Import'), Shared::appName(), Shared::appVersion(), $transaction->entryReference ?? '');
+        // For now is field intNote reserved for transaction ID.
+        $intNote = sprintf('%s: %s %s #%s', _('Automatic Import'), Shared::appName(), Shared::appVersion(), $transaction->references->accountServicer);
         $amount = abs($transaction->amount->value);
 
-        $this->setDataValue('symPar', $this->createSymPar($transaction->entryReference ?? ''));
-        $this->setDataValue('intNote', $intNote);
+        $this->setDataValue('intNote', "#{$transaction->references->accountServicer}");
         $this->setDataValue('note', 'Import Job '.Shared::cfg('JOB_ID', 'n/a'));
         $this->setDataValue('datePayment', ($transaction->valueDate ?? $transaction->bookingDate ?? $transaction->lastUpdated)->format(self::$dateTimeFormat));
         $this->setDataValue('dateStatement', (new \DateTimeImmutable())->format(self::$dateTimeFormat));
