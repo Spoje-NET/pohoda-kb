@@ -42,8 +42,8 @@ class Transactor extends PohodaBankClient
                 $transactions = $this->kbClient->transactions($this->accessToken, new TransactionSelection(
                     accountId: $this->accountId,
                     page: $page++,
-                    fromDate: $this->since,
-                    toDate: $this->until,
+                    fromDateTime: $this->since,
+                    toDateTime: $this->until,
                 ));
 
                 if ($transactions->empty) {
