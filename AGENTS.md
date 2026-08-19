@@ -1,4 +1,4 @@
-# WARP.md - Working AI Reference for pohoda-kb
+# AGENTS.md - Working AI Reference for pohoda-kb
 
 ## Project Overview
 **Type**: PHP Project/Debian Package
